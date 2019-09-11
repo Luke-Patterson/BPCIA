@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html>
+	<head>
+        <title>Topic Modeling Results</title>
+        <style>
+            * {
+                padding: 0;
+                margin: 0;
+            }
+
+            html {
+                width: 100%;
+                height: 100%;
+            }
+
+            body {
+                font-family: Arial, Helvetica, sans-serif;
+                font-size: 14px;
+                width: 99.5%;
+                min-width: 800px;
+                height: 100%;
+                min-height: 400px;
+                margin: auto;
+                /* padding: 15px; */
+                display: flex;
+                flex-direction: column;
+				background-color: #4d4d4d;
+            }
+
+            #page-title {
+                font-size: 22px;
+                letter-spacing: 1px;
+                font-weight: normal;
+                text-align: center;
+                padding: 10px;
+				color: white;
+            }
+
+            #content {
+                height: 100%;
+                display: flex;
+            }
+
+			#topics,
+			#documents {
+				width: 50%;
+				display: flex;
+				flex-direction: column;
+			}
+
+			#topics {
+				border-right: 1px solid #bfbfbf;
+			}
+
+			#documents {
+				border-left: 1px solid #bfbfbf;
+			}
+
+			#topics-title,
+			#documents-title {
+				text-align: center;
+				background-color: #333333;
+				padding: 7px 0;
+				cursor: pointer;
+				color: white;
+				border-bottom: 4px solid #bfbfbf;
+			}
+
+			#topics-title:hover,
+			#documents-title:hover {
+				color: #ffd633;
+				border-bottom: 4px solid #ffcc00;
+			}
+
+            #topic-container,
+			#document-container {
+				display:none;
+				width: 0;
+				padding: 5px;
+				overflow-y: auto;
+				background-color: #f5f5f5;
+			}
+
+			#topic-distribution-container {
+				margin: 20px auto;
+				padding: 10px;
+				width: 350px;
+				border: 1px solid black;
+			}
+
+			#topic-distribution-title,
+			#word-distribution-title
+			{
+				text-align: center;
+			}
+
+			#topics-content,
+			#documents-content {
+				display: flex;
+				height: 100%;
+			}
+
+			#topics-content {
+				border-left: 1px solid white;
+			}
+
+			#documents-content {
+				border-right: 1px solid white;
+			}
+
+			#documents-list-container {
+				width: 100%;
+				height: 100%;
+			}
+
+			#topics-list,
+			#documents-list {
+				width: 100%;
+				height: 100%;
+				overflow-y: auto;
+			}
+
+			.topic-name-container {
+				height: 32px;
+				width: 100%;
+				position: relative;
+				cursor: pointer;
+				overflow: hidden;
+				border-bottom: 2px solid white;
+				background-color: white;
+			}
+
+			.topic-name-container:hover .topic-name-bar,
+			.document-name:hover,
+            .document-name.selected,
+			.topic-name-container.selected .topic-name,
+			.topic-name-container.shrunken:hover .topic-name {
+				color: #ffd633;
+                background-color: rgb(32, 101, 148);
+			}
+
+			.topic-name-container:hover .topic-name {
+				color: #ffd633;
+			}
+
+			.topic-name-container.shrunken {
+				background-color: #4d4d4d;
+			}
+
+			.topic-name-bar {
+				background-color: #404040;
+				height: 100%;
+			}
+
+			.topic-name {
+				position: absolute;
+				left: 0;
+				top: 0;
+				height: 100%;
+				width: 100%;
+				line-height: 32px;
+				vertical-align: middle;
+				color: white;
+				padding: 0 5px;
+			}
+
+			#topic-title-container h3 {
+				display: inline;
+			}
+
+			#topic-title {
+				cursor: pointer;
+			}
+
+			#topic-title-input,
+			#save-title-button,
+			#cancel-title-button {
+				display: none;
+			}
+
+			#topic-title-input {
+				font-size: 14px;
+				font-weight: bold;
+				border: 1px solid #333333;
+				border-radius: 3px;
+				padding: 2px;
+			}
+
+			#cancel-title-button {
+				font-size: 12px;
+				color: #4da6ff;
+				cursor: pointer;
+			}
+
+			#topic-title-container,
+			#document-title {
+				text-align: center;
+				padding: 5px;
+			}
+
+			#average-topic-likelihood {
+				text-align: center;
+				font-size: 12px;
+				padding: 3px;
+			}
+
+			#search-related-documents {
+				font-size: 11px;
+				color: #0066cc;
+				cursor: pointer;
+				text-align: center;
+			}
+
+			#top-words-container {
+				width: 100%;
+				height: 400px;
+			}
+
+			#word-distribution {
+				width: 100%;
+			}
+
+			#top-documents-container,
+			#related-topics-container {
+				padding: 5px;
+			}
+
+			#top-documents-title,
+			#related-topics-title {
+				display: inline-block;
+			}
+
+			#top-documents-content,
+			#related-topics-content {
+				display: inline;
+			}
+
+			.document-link,
+			.topic-link {
+				color: #0066cc;
+				cursor: pointer;
+				padding: 1px 3px;
+			}
+
+			#topic-title:hover,
+			#search-related-documents:hover,
+			.document-link:hover {
+				color: #4da6ff;
+			}
+
+			.document-name {
+				background-color: #4d4d4d;
+				color: white;
+				border-bottom: 1px solid white;
+				overflow: hidden;
+			}
+
+			#documents-list-container {
+				display: flex;
+				flex-direction: column;
+			}
+
+			#documents-list {
+				height: 100%;
+				border-top: 1px solid white;
+			}
+
+			#documents-search-container {
+				padding: 5px;
+				margin: 5px;
+				border: 1px solid #333333;
+				border-radius: 5px;
+				display: flex;
+				background-color: white;
+			}
+
+			#documents-search {
+				border: none;
+				width: 100%;
+			}
+
+			#documents-search:focus {
+				outline: none;
+			}
+
+			#search-button {
+				height: 20px;
+				cursor: pointer;
+				padding-left: 5px;
+				border-left: 1px solid #333333;
+			}
+
+            .document-name {
+                padding: 8px;
+                cursor: pointer;
+                display: block;
+            }
+
+			#document-text {
+				padding: 5px;
+			}
+        </style>
+        <script crossorigin="anonymous" integrity="sha256-2Kok7MbOyxpgUVvAk/HJ2jigOSYS2auK4Pfzbm7uH60=" src="https://code.jquery.com/jquery-3.3.1.js">
+        </script>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.7.3/Chart.min.js"></script>
+    </head>
+    <body>
+        <h1 id="page-title">Topic Modeling Results</h1>
+        <div id="content">
+            <div id="topics">
+                <h2 id="topics-title">Topics</h2>
+				<div id="topics-content">
+					<div id="topics-list"></div>
+					<div id="topic-container">
+						<div id="topic-title-container">
+							<h3>Topic: </h3>
+							<h3 id="topic-title" onclick="changeTitle()"></h3>
+							<input id="topic-title-input">
+							<span id="cancel-title-button" onclick="hideNewTitle()">Cancel</span>
+						</div>
+						<div id="average-topic-likelihood"></div>
+						<div id="search-related-documents">Documents related to this topic</div>
+						<div id="top-words-container"><canvas height="300" id="word-distribution" width="300"></canvas></div>
+						<div id="top-documents-container">
+							<h4 id="top-documents-title">Top Documents: </h4>
+							<div id="top-documents-content"></div>
+						</div>
+					</div>
+				</div>
+            </div>
+            <div id="documents">
+                <h2 id="documents-title">Documents</h2>
+                <div id="documents-content">
+					<div id="documents-list-container">
+						<div id="documents-search-container">
+							<input id="documents-search" type="text"/>
+							<img id="search-button" src="templates/search.png"/>
+						</div>
+						<div id="documents-list"></div>
+					</div>
+					<div id="document-container">
+						<h3 id="document-title"></h3>
+						<div id="document-text"></div>
+						<div id="related-topics-container">
+							<h4 id="related-topics-title">Related Topics: </h4>
+							<div id="related-topics-content"></div>
+						</div>
+						<div id="topic-distribution-container">
+							<h3 id="topic-distribution-title">Topic Distribution</h3>
+							<div><canvas height="300" id="topic-distribution" width="300"></canvas></div>
+						</div>
+					</div>
+				</div>
+            </div>
+        </div>
+	</body>
+    <script>
+        function createTopicElements() {
+            var topicsList = $('#topics-list');
+
+			var highest = topics[0]['average_likelihood'];
+
+            for (var i = 0; i < topics.length; i++) {
+				var bar_percentage = String(topics[i]['average_likelihood'] / highest * 50 + 50) + '%';
+                topicsList.append(
+                    $('<div/>')
+                        .addClass('topic-name-container')
+                        .append(
+							$('<div/>')
+								.addClass('topic-name-bar')
+								.css('width', bar_percentage)
+						)
+						.append(
+							$('<div/>')
+								.addClass('topic-name')
+								.text(topics[i]['name'])
+						)
+                        .click({id: i}, selectTopic)
+                );
+            }
+        }
+
+		var word_distribution = undefined;
+        function selectTopic(event) {
+            var id = event.data.id;
+			var topic = topics[id];
+            $('.topic-name-container').removeClass('selected');
+            $('.topic-name-container').eq(id).addClass('selected');
+
+			$('#topic-title').text(topic['name']);
+			$('#topic-title-input').off('blur').blur({id: id}, saveTitle);
+			$('#average-topic-likelihood').text('Average Likelihood: ' + topic['average_likelihood'].toFixed(5));
+			$('#search-related-documents')
+				.off('click')
+				.click(function() {
+					$('#documents-search').val("topic='" + topic['name'] + "'");
+					searchDocuments();
+				});
+
+            if ($('#topic-container').css('display') == 'none') {
+                $('#topics-list').animate({width: '30%'}, 250, function() { $('#topics-list').css('border-right', '1px solid #333333'); });
+                $('#topic-container').css({display: 'block'}).animate({width: '70%'}, 250, function() {
+					createWordDistChart(topic);
+				});
+
+				var highest = topics[0]['average_likelihood'];
+				$('.topic-name-bar').each(function(i) {
+					var new_percentage = String(topics[i]['average_likelihood'] / highest * 100) + '%';
+					$(this).animate({'width': new_percentage}, 250);
+				});
+
+				$('.topic-name-container').animate({'border-width': 1}, 250);
+				$('.topic-name-container').addClass('shrunken');
+            }
+			else {
+				createWordDistChart(topic);
+			}
+
+			var topDocumentsContent = $('#top-documents-content')
+			topDocumentsContent.empty()
+			for (var i = 0; i < topic['top_documents'].length; i++) {
+				topDocumentsContent
+					.append(
+						$('<span/>')
+							.addClass('document-link')
+							.text(documents[topic['top_documents'][i]]['title'])
+							.click({documentId: topic['top_documents'][i]}, selectDocument)
+					);
+
+				if (i != topic['top_documents'].length - 1) {
+					topDocumentsContent.append($('<span/>').html(' &#x2022 '));
+				}
+			}
+        }
+
+		var previousTitle = undefined;
+
+		function changeTitle() {
+			previousTitle = $('#topic-title').text();
+			$('#topic-title-input').val(previousTitle);
+
+			$('#topic-title').hide();
+			$('#topic-title-input').css('display', 'inline').select();
+			$('#cancel-title-button').css('display', 'inline');
+		}
+
+		function hideNewTitle() {
+			previousTitle = undefined;
+
+			$('#topic-title').css('display', 'inline');
+			$('#topic-title-input').hide();
+			$('#cancel-title-button').hide();
+		}
+
+		function saveTitle(event) {
+			var id = event.data.id;
+			var newTitle = $('#topic-title-input').val();
+
+			topics[id]['name'] = newTitle;
+			$('#topic-title').text(newTitle);
+			$('#topics-list .topic-name').eq(id).text(newTitle);
+
+			hideNewTitle();
+		}
+
+		function createWordDistChart(topic) {
+			var data = {
+				datasets:[{
+					data: topic['top_words_values'],
+					backgroundColor: 'rgba(0, 204, 102, 0.5)',
+					borderColor: 'rgba(0, 153, 77, 1)',
+					borderWidth: 1
+				}],
+				labels: topic['top_words']
+			};
+
+			if (word_distribution == undefined) {
+				var ctx = $('#word-distribution');
+				word_distribution = new Chart(ctx,{
+					type: 'bar',
+					data: data,
+					options: {
+						legend: {
+							display: false
+						},
+						title: {
+							display: true,
+							text: 'Word Distribution'
+						},
+						scales: {
+							xAxes: [{
+								ticks: {
+									autoSkip: false
+								}
+							}]
+						},
+						responsive: true,
+						maintainAspectRatio: false,
+					}
+				});
+			} else {
+				word_distribution.config.data = data;
+				word_distribution.update();
+			}
+		}
+
+		var docIds = undefined;
+		function createDocumentElements() {
+			var documentList = $('#documents-list');
+
+			for (var i = 0; i < docIds.length; i++) {
+				documentList
+					.append(
+						$('<div/>')
+							.addClass('document-name')
+							.attr('id', 'document_' + docIds[i])
+							.text(documents[docIds[i]]['title'])
+							.click({documentId: docIds[i]}, selectDocument)
+					)
+			}
+		}
+
+		var topic_distribution = undefined;
+		var valid_colors = ['#0066ff', '#cc0000', '#339933', '#e6e600', '#666699', '#ff9933', '#29a3a3']
+        function selectDocument(event) {
+            var id = event.data.documentId;
+			var document = documents[id];
+            $('.document-name').removeClass('selected');
+            $('#document_' + id + '.document-name').addClass('selected');
+
+            $('#document-title').text(document['title']);
+            $('#document-text').text(document['text']);
+
+			var relatedDocumentsContent = $('#related-topics-content');
+			relatedDocumentsContent.empty();
+			for (var i = 0; i < document['closest_topics'].length; i++) {
+				relatedDocumentsContent
+					.append(
+						$('<span/>')
+							.addClass('topic-link')
+							.text(topics[document['closest_topics'][i]]['name'])
+							.click({id: document['closest_topics'][i]}, selectTopic)
+					);
+
+				if (i != document['closest_topics'].length - 1) {
+					relatedDocumentsContent.append($('<span/>').html(' &#x2022 '));
+				}
+			}
+
+            if ($('#document-container').css('display') == 'none') {
+                $('#documents-list-container').animate({width: '30%'}, 250, function() { $('#documents-list-container').css('border-right', '1px solid #333333'); });
+                $('#document-container').css({display: 'block'}).animate({width: '70%'}, 250);
+            }
+
+			var data = {
+				datasets:[{
+					data: [],
+					backgroundColor: []
+				}],
+				labels: []
+			};
+
+			var sum = 0;
+			for (var i = 0; i < document['closest_topics'].length; i++) {
+				var topicId = document['closest_topics'][i];
+				var val = document['topic_distributions'][topicId];
+				data.datasets[0].data.push(val);
+				data.datasets[0].backgroundColor.push(valid_colors[i % valid_colors.length]);
+				data.labels.push(topics[topicId]['name']);
+				sum += val;
+			}
+
+			data.datasets[0].data.push(1 - sum);
+			data.datasets[0].backgroundColor.push('#b3b3b3');
+			data.labels.push('Remaining');
+
+			if (topic_distribution == undefined) {
+				var ctx = $('#topic-distribution');
+				topic_distribution = new Chart(ctx,{
+					type: 'pie',
+					data: data
+				});
+			} else {
+				topic_distribution.config.data = data;
+				topic_distribution.update();
+			}
+        }
+
+		function searchDocuments() {
+			var query = $('#documents-search').val().toLowerCase();
+
+			if (query == '') {
+				clearSearch();
+			} else {
+				setExitSearch();
+				if (query.slice(0, 6) == 'topic=' && query.charAt(6) == "'" && query.charAt(query.length - 1) == "'") {
+					// EXAMPLE: topic='just, like, know'
+					var topicName = query.slice(7, -1);
+					var topicId = findTopicId(topicName);
+
+					$('.document-name').hide();
+					if (topicId == -1) {
+						return;
+					}
+					for (var i = 0; i < docIds.length; i++) {
+						if (documents[docIds[i]]['closest_topics'].includes(topicId)) {
+							$('#document_' + docIds[i]).show();
+						}
+					}
+				} else {
+					$('.document-name').hide();
+					for (var i = 0; i < docIds.length; i++) {
+						if (documents[docIds[i]]['title'].toLowerCase().includes(query)) {
+							$('#document_' + docIds[i]).show();
+						}
+					}
+				}
+			}
+			$('#documents-search').focus();
+			$('#documents-list').animate({ scrollTop: "0" }, 250);
+		}
+
+		function findTopicId(topicName) {
+			for (var i = 0; i < topics.length; i++) {
+				if (topics[i]['name'] == topicName) {
+					return i;
+				}
+			}
+
+			return -1;
+		}
+
+		function clearSearch() {
+			$('#documents-search').val('');
+			$('.document-name').show();
+			setSearchMagnifyingGlass();
+			$('#documents-search').focus();
+			$('#documents-list').animate({ scrollTop: "0" }, 250);
+		}
+
+		function setSearchMagnifyingGlass() {
+			$('#search-button')
+				.attr('src', 'templates/search.png')
+				.off('click')
+				.click(searchDocuments);
+
+			if ($('#documents-search').val() == '') {
+				$('.document-name').show();
+			}
+		}
+
+		function setExitSearch() {
+			$('#search-button')
+				.attr('src', 'templates/exit.png')
+				.off('click')
+				.click(clearSearch);
+		}
+
+        $(document).ready(function() {
+            createTopicElements();
+			docIds = Object.keys(documents);
+			createDocumentElements();
+			$('#documents-search-container #search-button').click(searchDocuments);
+			$('#documents-search')
+				.on('input', setSearchMagnifyingGlass)
+				.keypress(function(e) {
+					if (e.which == 13) {
+						searchDocuments();
+					}
+				});
+        });
+    </script>
+</html>
