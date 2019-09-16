@@ -207,7 +207,7 @@ class Settings:
     def __init__(self):
         self.file_name = ''
         self.tm_method = 'LDA'
-        self.n_components = 100
+        self.n_components = 15
         self.learning_method = 'online'
 
 

@@ -64,6 +64,9 @@ class BPCI_monitor:
     # load existing tweets from a csv file
     def load_tweets(self,filename):
         self.tdf=pd.read_csv("output/"+filename)
+        # make sure date is a timestamp column
+        if 'date' in self.tdf.columns:
+            self.tdf['date']=self.tdf.date.apply(lambda x: pd.Timestamp(parser.parse(x)))
 
     # geocode tweets
     def geocode_tweets(self):
@@ -166,15 +169,30 @@ class BPCI_monitor:
     # Data analysis functions
     # ====================================================================
     # make a histogram of tweet arrivals
-    def graph_tweet_arrivals(self,filename='tweets_over_time',
+    def graph_tweet_arrivals(self,filename='tweets_over_time.png',
         start_date=datetime.date(year = 2018, month = 1, day = 9),
-        mark_date=None,
-        end_date=datetime.date.today()):
+        mark_date=datetime.date(year = 2018, month = 1, day = 9),
+        end_date=datetime.date.today(),
+        words_filt=None):
+        '''
+        params:
+        filename: name of filename to save tweet graph as picture
+        start_date, end_date: range of dates to graph
+        mark_date: date to change colors of bars
+        words_filt: either None or list. if list, filter to only tweets that
+        contain one of the words in the list.
+        '''
+
         # filter to specified time range
         temp_df=self.tdf.copy()
+        if words_filt!=None:
+            temp_df=temp_df.loc[temp_df.text.apply(lambda x: any([i in x.lower() for i in words_filt]))]
+        if temp_df.shape[0]==0:
+            print('no tweets found for', words_filt)
+            import pdb; pdb.set_trace()
+            return
         start_date=pd.Timestamp(start_date)
         end_date=pd.Timestamp(end_date)
-        mark_date=pd.Timestamp(mark_date)
         temp_df=temp_df.loc[(temp_df['date']>=start_date) &
             (temp_df['date']<=end_date)]
         # make 1 bin/week, depending on current date
@@ -209,56 +227,56 @@ class BPCI_monitor:
                 s='<-'+str(row['Date'].date())+': '+row['Announcement'],
                 bbox=dict(boxstyle='square', fc='white', ec='none'))
         plt.tight_layout()
-        plt.savefig('output/'+filename+'.png')
+        plt.savefig('output/'+filename)
 
     # generate word counts over time
 
+    # Spacy does not seem to do a very good job parsing out entities
     # identification of named entities in tweets
-    # WARNING: Spacy does not seem to do a very good job parsing out entities
-    def identify_named_entities(self):
-        # use spacy to parse out entities
-        nlp = spacy.load("en_core_web_sm")
-        ent_counts={}
-        ent_labels=[]
-        # loop for each tweet containing vendor flag
-        df=self.tdf.loc[self.tdf['vendor_flag']]
-        print('identifying entities in ' +str(df.shape[0]) + ' tweets')
-        for n,i in enumerate(df.text):
-            if n % 100 ==0:
-                print(n)
-            doc = nlp(i)
-            for ent in doc.ents:
-                # only add if label is an "org"
-                if ent.label_=='ORG':
-                    ent_labels.append([ent.text,ent.label_])
-        ent_df=pd.DataFrame(ent_labels)
-        # curate some of the list to exclude misinterpreted entities
-        ent_df=ent_df.loc[ent_df[0].apply(lambda x: 'BPCI' not in x)]
-        ent_df=ent_df.loc[ent_df[0].apply(lambda x: 'Bundled' not in x)]
-        ent_df=ent_df.loc[ent_df[0].apply(lambda x: 'Medicare' not in x)]
-        ent_df=ent_df.loc[ent_df[0].apply(lambda x: 'MIPS' not in x)]
-        ent_df=ent_df.loc[ent_df[0].apply(lambda x: 'MACRA' not in x)]
-        ent_df=ent_df.loc[ent_df[0].apply(lambda x: 'ACO' not in x)]
-        ent_df=ent_df.loc[ent_df[0].apply(lambda x: 'CMMI' not in x)]
-        ent_df=ent_df.loc[ent_df[0].apply(lambda x: 'EHR' not in x)]
-        ent_df=ent_df.loc[ent_df[0].apply(lambda x: 'QPP' not in x)]
-        ent_df=ent_df.loc[ent_df[0].apply(lambda x: 'Federal Circuit Affirms Noninfringement' not in x)]
-
-        # export the tabulations of named entities
-        ent_df[0].value_counts().to_csv('output/working/entity_tabulation.csv',header=False)
-
-        # export those tweets which are flagged as "vendor tweets"
-        df.to_csv('output/working/vendor_tweets.csv',index=False)
-
-        # from this tabulation, manually curate the major vendors identified
-        # Also, curate based on the list of tweets that have keywords
-        # indicating its selling something (the vendor_flag column)
-        curate_df=pd.read_excel('output/working/vendor_entity_list.xlsx')
+    # def identify_named_entities(self):
+    #     # use spacy to parse out entities
+    #     nlp = spacy.load("en_core_web_sm")
+    #     ent_counts={}
+    #     ent_labels=[]
+    #     # loop for each tweet containing vendor flag
+    #     df=self.tdf.loc[self.tdf['vendor_flag']]
+    #     print('identifying entities in ' +str(df.shape[0]) + ' tweets')
+    #     for n,i in enumerate(df.text):
+    #         if n % 100 ==0:
+    #             print(n)
+    #         doc = nlp(i)
+    #         for ent in doc.ents:
+    #             # only add if label is an "org"
+    #             if ent.label_=='ORG':
+    #                 ent_labels.append([ent.text,ent.label_])
+    #     ent_df=pd.DataFrame(ent_labels)
+    #     # curate some of the list to exclude misinterpreted entities
+    #     ent_df=ent_df.loc[ent_df[0].apply(lambda x: 'BPCI' not in x)]
+    #     ent_df=ent_df.loc[ent_df[0].apply(lambda x: 'Bundled' not in x)]
+    #     ent_df=ent_df.loc[ent_df[0].apply(lambda x: 'Medicare' not in x)]
+    #     ent_df=ent_df.loc[ent_df[0].apply(lambda x: 'MIPS' not in x)]
+    #     ent_df=ent_df.loc[ent_df[0].apply(lambda x: 'MACRA' not in x)]
+    #     ent_df=ent_df.loc[ent_df[0].apply(lambda x: 'ACO' not in x)]
+    #     ent_df=ent_df.loc[ent_df[0].apply(lambda x: 'CMMI' not in x)]
+    #     ent_df=ent_df.loc[ent_df[0].apply(lambda x: 'EHR' not in x)]
+    #     ent_df=ent_df.loc[ent_df[0].apply(lambda x: 'QPP' not in x)]
+    #     ent_df=ent_df.loc[ent_df[0].apply(lambda x: 'Federal Circuit Affirms Noninfringement' not in x)]
+    #
+    #     # export the tabulations of named entities
+    #     ent_df[0].value_counts().to_csv('output/working/entity_tabulation.csv',header=False)
+    #
+    #     # export those tweets which are flagged as "vendor tweets"
+    #     df.to_csv('output/working/vendor_tweets.csv',index=False)
+    #
+    #     # from this tabulation, manually curate the major vendors identified
+    #     # Also, curate based on the list of tweets that have keywords
+    #     # indicating its selling something (the vendor_flag column)
+    #     curate_df=pd.read_excel('output/working/vendor_entity_list.xlsx')
 
     # ====================================================================
     # pyMABED functions
     # ====================================================================
-
+    # haven't been able to get meaningful results with pyMABED really
     # Tweet volume anomaly detection - assess whether recent tweet volume (from
     # mark date to present) is anomalous
     # using pyMABED package - cloned/tweeked from https://github.com/AdrienGuille/pyMABED
@@ -359,7 +377,7 @@ class BPCI_monitor:
     def apply_TM(self,in_filename='BPCIA_tweets_clean',out_results='TM_results',
         out_topics='TM_topics'):
         settings=Settings()
-        settings.file_name='output/'+filename+'.csv'
+        settings.file_name='output/'+in_filename+'.csv'
         results=run_lda(settings)
         # save results
         self.TM_results=results[0]
@@ -367,6 +385,8 @@ class BPCI_monitor:
         results[0].to_pickle('output/'+out_results+'.pkl')
         with open('output/'+out_topics+'.json', 'w') as fjson:
              json.dump(results[1], fjson)
+        topic_df=pd.read_json('output/'+out_topics+'.json')
+        topic_df.to_csv('output/'+out_topics+'.csv')
 
     # ====================================================================
     # Geospatial Analysis functions
@@ -377,8 +397,8 @@ class BPCI_monitor:
     def create_USA_heat_map(self):
         longitudes=self.tdf.loc[self.tdf['longitude'].isna()==False,'longitude']
         latitudes=self.tdf.loc[self.tdf['latitude'].isna()==False,'latitude']
-        # Temporarily put in a default Gmap API key for ease of development - remove later        
-        #key= add Google API Key
+        # Temporarily put in a default Gmap API key for ease of development - remove later
+        key= 'add Google API Key'
         gmap = gmplot.GoogleMapPlotter(38.817191, -100.068385,5,apikey=key)
         # Overlay our datapoints onto the map
         gmap.heatmap(latitudes, longitudes,radius=75,opacity=.8)
