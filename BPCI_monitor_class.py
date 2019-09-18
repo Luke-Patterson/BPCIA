@@ -1,31 +1,41 @@
 # define class of a "monitoring object"
-# some custom functions
+# some custom functions for tweet extraction and analysis
 from extract_func.extract_tweets import extract_tweets
 from analysis_func.sentiment_analysis import sentiment_scoring
-# other packages to import
+# some custom functions for topic modeling
+from tm_gui.GUI import run_lda
+from tm_gui.GUI import Settings
+# basic python packages to import
 import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
+import datetime
+import wordcloud
+from dateutil import parser
+import time
+import subprocess
+import re
+# geocoding tools
+import geopy
+import geopandas as gpd
+from geopy.geocoders import Nominatim
+geopy.geocoders.options.default_user_agent = "my-application"
+from shapely.geometry import Point
+# mapping tools
+import gmplot
+import folium
+# data storage libraries
+import pickle
+import json
 import pandas as pd
 from pandas.plotting import register_matplotlib_converters
 register_matplotlib_converters()
 import numpy as np
-import datetime
-import wordcloud
-from tm_gui.GUI import run_lda
-from tm_gui.GUI import Settings
-from dateutil import parser
-import geopy
-import geopandas as gpd
-import time
-from geopy.geocoders import Nominatim
-geopy.geocoders.options.default_user_agent = "my-application"
-from shapely.geometry import Point
-import folium
-import pickle
-import json
-import subprocess
+# entity recognition library
 import spacy
-import gmplot
+# nltk tools for NLP preprocessing
 from nltk.corpus import opinion_lexicon as ol
+from sklearn.feature_extraction.text import CountVectorizer
+from nltk.stem.snowball import SnowballStemmer
 
 class BPCI_monitor:
     """
@@ -44,7 +54,7 @@ class BPCI_monitor:
         self.tdf=extract_tweets('BPCI',['BPCIAdvanced','"BPCI Advanced"','"BPCIA"',
             '"BPCI-A"','"Bundled Payments for Care Improvement–Advanced"',
             '"Bundled Payments for Care Improvement Advanced"'],start_date,
-           None, get_replies = False, get_retweets = get_retweets, geocode_loc=False)
+           None, get_replies = False, get_retweets = get_retweets, geocode_loc=geocode_loc)
         if geocode_loc:
             self.geocode_tweets()
 
@@ -228,8 +238,91 @@ class BPCI_monitor:
                 bbox=dict(boxstyle='square', fc='white', ec='none'))
         plt.tight_layout()
         plt.savefig('output/'+filename)
+        # save necessary dataframes for Mike to reconstruct
+        # CSV No. 1 - number of tweets each week
+        bar_df=pd.DataFrame([[mdates.num2date(i),j] for i,j in zip(bins,N)], columns=['Date','Number of Tweets'])
+        bar_df.to_csv('output/bar_values.csv')
+        # CSV No. 2 - BPCI_announcements
+        # just saving input/BPCI_annonucements.csv
+        ann_df.to_csv('output/BPCI_announcements.csv')
 
-    # generate word counts over time
+    # analysis of word counts over time
+    def word_count_analysis(self):
+        # store word count results in chunks by week
+        wc_df=pd.DataFrame()
+        start_date=pd.Timestamp(datetime.date(year = 2018, month = 1, day = 9))
+        end_date=pd.Timestamp(datetime.date.today())
+        wks_elapsed=round((end_date-start_date).days/7)
+        start_week=start_date
+        agg_df=pd.DataFrame()
+        print('aggregating week counts')
+        for i in range(wks_elapsed):
+            end_week=pd.Timestamp(start_week+datetime.timedelta(days=7))
+            # for each week, get tweets from that week
+            temp_df= self.tdf.loc[(self.tdf.date>=start_week)&(self.tdf.date<end_week)]
+            # merge into a single string  text from all tweets
+            corpus=temp_df.text.str.cat(sep=' ').split()
+            # stem and lemmaize text
+            stemmer = SnowballStemmer("english")
+            corpus = [' '.join([stemmer.stem(word) for word in x.split()]) for x in corpus]
+            corpus = [re.sub(r'[^a-zA-Z\s]', ' ', x) for x in corpus]
+            # remove hyperlink tokens
+            corpus = [i for i in corpus if 'https' not in i]
+            corpus = [' '.join(corpus)]
+            count_vectorizer = CountVectorizer(stop_words='english')#max_df=0.8, min_df=0.01,
+            word_counts = count_vectorizer.fit_transform(corpus)
+            word_df=pd.DataFrame(word_counts.toarray(),index=[str(start_week)[0:10]],columns=count_vectorizer.get_feature_names())
+            # normalize to proportion of all tweets
+            word_df=word_df.fillna(0)
+            word_df=word_df/temp_df.shape[0]
+            agg_df=agg_df.append(word_df,sort=False)
+            # increment start_week
+            start_week+=datetime.timedelta(days=7)
+        agg_df=agg_df.fillna(0)
+        #create df that shows week to week change in word use
+        # to reduce noise, convert all to minimum use over past 5 weeks
+        min_df=pd.DataFrame(index=agg_df.index,columns=agg_df.columns)
+        print('calculating rolling minimums')
+        for i in agg_df.columns:
+            min_df[i]=agg_df[i].rolling(5).min()
+        #create df to flag anomalous changes in those cells that pass a certain minimum
+        filt_df=agg_df.copy()
+        filt_df=filt_df[(min_df!=0)&(min_df.isna()==False)]
+        # drop all missing columns
+        filt_df=filt_df.dropna(how='all',axis=1)
+        # repopulate remaining columns with all values
+        filt_df=agg_df[filt_df.columns].copy()
+        # sense of number of non-zero cells picked up this way
+        min_df=min_df.iloc[4:,:]
+        print('number of non zero agg_df cells')
+        print((agg_df.iloc[4:,:].values!=0).sum(axis=1).sum())
+        print('number of non zero min_df cells')
+        print((min_df.values!=0).sum(axis=1).sum())
+        # calculate moving average of word use
+        print('calculating rolling averages for those words')
+        for i in filt_df.columns:
+            filt_df[i]=filt_df[i].rolling(5,min_periods=1).mean()
+        chg_df=filt_df.diff().dropna(how='all',axis=0)
+        # plot histogram of all values to get a sense of variation in weekly changes in moving average
+        vals= chg_df.values.tolist()
+        # flatten list of values
+        vals=[y for x in vals for y in x]
+        plt.clf()
+        plt.hist(vals)
+        #plt.show()
+        plt.clf()
+        print('summary statistics of change values')
+        print(pd.Series(vals).describe())
+        # flag changes that are >10% changes in moving average of normalized word freq in either direction
+        flg_df=(chg_df>.1).astype('int')
+        temp_flg=(chg_df<-.1).astype('int')
+        temp_flg=temp_flg.replace(1,-1)
+        flg_df[temp_flg==-1]=-1
+        # look at which words have "significant" shifts
+        sig_words=flg_df.abs().sum()
+        sig_words=sig_words.loc[sig_words!=0]
+        print([i for i in sig_words.index])
+        # running into same problem as topic model; trends in individual words are not particularly meaningful
 
     # Spacy does not seem to do a very good job parsing out entities
     # identification of named entities in tweets
@@ -370,8 +463,8 @@ class BPCI_monitor:
         pos_dict =  {k:v for k,v in wc.items() if k in pos_words}
         neg_dict =  {k:v for k,v in wc.items() if k in neg_words}
 
-        wordcloud.WordCloud().generate_from_frequencies(pos_dict).recolor(colormap='Greens').to_file('output/pos_wordcloud.png')
-        wordcloud.WordCloud().generate_from_frequencies(neg_dict).recolor(colormap='Reds').to_file('output/neg_wordcloud.png')
+        wordcloud.WordCloud(width=800,height=400).generate_from_frequencies(pos_dict).recolor(colormap='Greens').to_file('output/pos_wordcloud.png')
+        wordcloud.WordCloud(width=800,height=400).generate_from_frequencies(neg_dict).recolor(colormap='Reds').to_file('output/neg_wordcloud.png')
 
     # run tweet language through LDA topic model
     def apply_TM(self,in_filename='BPCIA_tweets_clean',out_results='TM_results',
@@ -392,12 +485,10 @@ class BPCI_monitor:
     # Geospatial Analysis functions
     # ====================================================================
     # create heat map of US-based tweets
-    # TODO: currently just some dots on USA shapefile, make a prettier heat map with
-    # OpenStreetMap backdrop.
     def create_USA_heat_map(self):
         longitudes=self.tdf.loc[self.tdf['longitude'].isna()==False,'longitude']
         latitudes=self.tdf.loc[self.tdf['latitude'].isna()==False,'latitude']
-        # Temporarily put in a default Gmap API key for ease of development - remove later
+        # need to add personal Google API key below for this to work
         key= 'add Google API Key'
         gmap = gmplot.GoogleMapPlotter(38.817191, -100.068385,5,apikey=key)
         # Overlay our datapoints onto the map
