@@ -58,16 +58,18 @@ class BPCI_monitor:
         if geocode_loc:
             self.geocode_tweets()
 
-
     # save class' tdf to output folder
     def save_tweets(self,filename,append=False):
+        # option to append to existing file
         if append:
             # load existing tweets database
-            df= pd.read_csv("output/"+filename+".csv")
+            df= pd.read_csv("output/"+filename)
             df= df.append(self.tdf, ignore_index=True, sort=False)
             # drop duplicate tweet ids that are already present in the csv
             df=df.drop_duplicates(subset='id')
+            df=df.sort_values('created_at',ascending=False)
             df.to_csv("output/"+filename,index=False)
+            self.tdf=df
         else:
             self.tdf.to_csv("output/"+filename,index=False)
 
@@ -241,7 +243,7 @@ class BPCI_monitor:
         # save necessary dataframes for Mike to reconstruct
         # CSV No. 1 - number of tweets each week
         bar_df=pd.DataFrame([[mdates.num2date(i),j] for i,j in zip(bins,N)], columns=['Date','Number of Tweets'])
-        bar_df.to_csv('output/bar_values.csv')
+        bar_df.to_csv('output/'+filename+'_bar_values.csv')
         # CSV No. 2 - BPCI_announcements
         # just saving input/BPCI_annonucements.csv
         ann_df.to_csv('output/BPCI_announcements.csv')
@@ -323,6 +325,15 @@ class BPCI_monitor:
         sig_words=sig_words.loc[sig_words!=0]
         print([i for i in sig_words.index])
         # running into same problem as topic model; trends in individual words are not particularly meaningful
+        # will output weighted average use of words flagged as meaningful data
+        for i in sig_words.index:
+            plt.clf()
+            filt_df[i].plot(figsize=(10,6))
+            plt.xlabel('Date')
+            plt.ylabel('% of Tweets containing word')
+            plt.title(i.title())
+            plt.tight_layout()
+            plt.savefig('output/word_trends/'+i+'.png')
 
     # Spacy does not seem to do a very good job parsing out entities
     # identification of named entities in tweets
@@ -423,7 +434,8 @@ class BPCI_monitor:
     # then export positive and negative tweets to csv
     def score_sentiment(self, neg_csv='Negative_BPCI_tweets',pos_csv='Positive_BPCI_tweets',
         start_date=datetime.date(year = 2018, month = 1, day = 9),
-        end_date=datetime.date.today()):
+        end_date=datetime.date.today(),
+        export_csv=True):
         # filter to specified time range
         temp_df=self.tdf.copy()
         start_date=pd.Timestamp(start_date)
@@ -432,14 +444,41 @@ class BPCI_monitor:
             (temp_df['date']<=end_date)]
         temp_df=sentiment_scoring(temp_df,text_var='text')
         sent_df = temp_df.copy()
-        # # pull out complaints by looking at negative sentiment scores
-        sent_df = sent_df.sort_values('neg',ascending=False)
-        #df = df.loc[df['neg']>.1]
-        sent_df.to_csv('output/'+neg_csv+'.csv', index=False)
-        sent_df = sent_df.sort_values('pos',ascending=False)
-        #df = df.loc[df['neg']>.1]
-        sent_df.to_csv('output/'+pos_csv+'.csv', index=False)
+        if export_csv:
+            # # pull out complaints by looking at negative sentiment scores
+            sent_df = sent_df.sort_values('neg',ascending=False)
+            #df = df.loc[df['neg']>.1]
+            sent_df.to_csv('output/'+neg_csv+'.csv', index=False)
+            sent_df = sent_df.sort_values('pos',ascending=False)
+            #df = df.loc[df['neg']>.1]
+            sent_df.to_csv('output/'+pos_csv+'.csv', index=False)
+        else:
+            return(sent_df)
 
+    # function to graph overall sentiment scores over time
+    def graph_sentiment(self):
+        df=self.score_sentiment(export_csv=False)
+        # store sentiment in chunks by week
+        start_date=pd.Timestamp(datetime.date(year = 2018, month = 1, day = 9))
+        end_date=pd.Timestamp(datetime.date.today())
+        wks_elapsed=round((end_date-start_date).days/7)
+        start_week=start_date
+        agg_df=pd.DataFrame()
+        print('aggregating week counts')
+        for i in range(wks_elapsed):
+            end_week=pd.Timestamp(start_week+datetime.timedelta(days=7))
+            # for each week, get tweets from that week
+            temp_df= df.loc[(df.date>=start_week)&(df.date<end_week)]
+            wk_pos=temp_df.pos.mean()
+            wk_neg=temp_df.neg.mean()
+            wk_neu=temp_df.neu.mean()
+            wk_compound=temp_df['compound'].mean()
+            agg_df=agg_df.append(pd.Series([wk_pos,wk_neg,wk_neu,wk_compound],
+                name=str(start_week)[0:10]), ignore_index=True,sort=False)
+            # increment start_week
+            start_week+=datetime.timedelta(days=7)
+        agg_df.columns=['Positive','Negative','Neutral','Compound']
+        import pdb; pdb.set_trace()
     # generate word clouds from text of tweets, positive and negative
     def gen_word_cloud(self):
         raw_text = ' '.join(self.tdf.filt_text.to_list())
@@ -510,3 +549,61 @@ class BPCI_monitor:
         # ax = bg.plot(color='snow', linewidth=0.3, edgecolor='gray')
         # ax = geo_df.plot(ax=ax, color='k',alpha=.75)
         # plt.savefig('output/tweet_heat_map.png')
+    # create tabulation of locations, since not all that many are ready
+    def create_location_tabulation(self):
+        self.tdf['author_location']=self.tdf.author_location.str.replace(".","")
+        locs_tab=self.tdf.author_location.value_counts().dropna()
+        locs_tab=locs_tab.loc[[',' in s for s in locs_tab.index]]
+        locs_tab=locs_tab.loc[['#' not in s for s in locs_tab.index]]
+        locs_tab=locs_tab.loc[locs_tab>10]
+        plt.clf()
+        plt.bar(locs_tab.index,locs_tab.values)
+        plt.xticks(rotation='vertical')
+        plt.xlabel('City')
+        plt.ylabel('Number of Tweets from City')
+        plt.title('Geolocation of Tweets')
+        plt.tight_layout()
+        plt.savefig('output/location_bar_chart.png')
+        # create tabulation weighted by city population
+        # load in city population data
+        city_df=pd.read_csv('input/ACS_city_pop_2018.csv',encoding='latin-1')
+        # clean up city_df geography tag
+        city_df['Geography']=city_df['Geography'].str.replace('city','')
+        city_df['Geography']=city_df['Geography'].str.replace('town','')
+        city_df['Geography']=city_df['Geography'].str.replace('.','')
+        geo_split=city_df['Geography'].str.split(',',expand=True)
+        city_df['City']=geo_split[0].str.strip()
+        city_df['State']=geo_split[1].str.strip()
+        # add in state acronym
+        state_df=pd.read_csv('input/abbr-name.csv')
+        city_df=city_df.merge(state_df, how='left', on='State')
+        # clean up some weird values
+        city_df.loc[city_df['State']=='District of Columbia','Acronym']='DC'
+        city_df.loc[city_df['City']=='Nashville-Davidson metropolitan government (balance)','City']='Nashville'
+        # merge in state population
+        locs_tab=locs_tab.reset_index()
+        locs_tab=locs_tab.rename({'author_location':'num_tweets'},axis=1)
+        geo_split=locs_tab['index'].str.split(',',expand=True)
+        locs_tab['City']=geo_split[0].str.strip()
+        locs_tab['State']=geo_split[1].str.strip()
+        locs_tab['State']=locs_tab['State'].str.replace("New York",'NY')
+        locs_tab.loc[locs_tab['City']=='Danvers','City']='Beverly'
+        locs_tab=locs_tab.merge(city_df[['City','Acronym','2018 Population Estimate']],
+            how='left',left_on=['City','State'],right_on=['City','Acronym'])
+        # normalize tweets by population
+        locs_tab['tweets_per_100k']=locs_tab['num_tweets']*100000/locs_tab['2018 Population Estimate']
+        locs_tab=locs_tab.sort_values('tweets_per_100k',ascending=False)
+        temp_locs=locs_tab.copy()
+        temp_locs=temp_locs.loc[temp_locs['2018 Population Estimate']>100000]
+        # redo tabulation with tweets per 100k population
+        plt.clf()
+        plt.bar(temp_locs['index'],temp_locs.tweets_per_100k)
+        plt.xticks(rotation='vertical')
+        plt.xlabel('City')
+        plt.ylabel('Number of Tweets per 100,000 Population')
+        plt.title('Geolocation of Tweets')
+        plt.tight_layout()
+        plt.savefig('output/location_bar_chart_pop_norm.png')
+        # save tabulation as CSV
+        locs_tab.to_csv('output/location_tabulation.csv',header=True)
+        import pdb; pdb.set_trace()

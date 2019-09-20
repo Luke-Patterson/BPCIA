@@ -74,7 +74,7 @@ def clean_API_output(api_df,geocode_loc):
                     else:
                         raise('Error: too many time out attempts')
 
-        df['author_geocoord']=df['author_location'].apply(geo_locate)
+        api_df['author_geocoord']=api_df['author_location'].apply(geo_locate)
 
     # standardize created_by date
     def stand_date(date):
