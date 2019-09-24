@@ -150,12 +150,20 @@ class BPCI_monitor:
         # Biologics Price Competition and Innovation Act of 2009 (enacted in 2010)
         df=df.loc[df['text'].apply(lambda x: 'biologic' not in x.lower())]
         df=df.loc[df['text'].apply(lambda x: 'biosimilar' not in x.lower())]
-        df=df.loc[df['text'].apply(lambda x: '2010' not in x.lower())]
+        df=df.loc[df['text'].apply(lambda x: 'biosims' not in x.lower())]
+        df=df.loc[df['text'].apply(lambda x: 'passed in 2010' not in x.lower())]
         df=df.loc[df['text'].apply(lambda x: 'hatch-waxman' not in x.lower())]
         df=df.loc[df['text'].apply(lambda x: 'patent' not in x.lower())]
         df=df.loc[df['text'].apply(lambda x: 'circuit' not in x.lower())]
         df=df.loc[df['text'].apply(lambda x: 'court' not in x.lower())]
-        df=df.loc[df['text'].apply(lambda x: 'FDA' not in x)]
+        df=df.loc[df['text'].apply(lambda x: 'FDA' not in x.lower())]
+        df=df.loc[df['text'].apply(lambda x: 'lawsuit' not in x.lower())]
+        df=df.loc[df['text'].apply(lambda x: 'statelaw' not in x.lower())]
+        df=df.loc[df['text'].apply(lambda x: 'state law' not in x.lower())]
+        df=df.loc[df['text'].apply(lambda x: 'manufacturing' not in x.lower())]
+        df=df.loc[df['text'].apply(lambda x: 'litigation' not in x.lower())]
+        df=df.loc[df['text'].apply(lambda x: 'trade secret' not in x.lower())]
+        df=df.loc[df['text'].apply(lambda x: 'legal jeopardy' not in x.lower())]
 
         # parse out longitude and latitude
         parse_coord=df['author_geocoord'].str.split(', ',expand=True)
@@ -326,6 +334,7 @@ class BPCI_monitor:
         print([i for i in sig_words.index])
         # running into same problem as topic model; trends in individual words are not particularly meaningful
         # will output weighted average use of words flagged as meaningful data
+        ann_df=pd.read_excel('input/BPCI_announcements.xlsx')
         for i in sig_words.index:
             plt.clf()
             filt_df[i].plot(figsize=(10,6))
@@ -333,6 +342,10 @@ class BPCI_monitor:
             plt.ylabel('% of Tweets containing word')
             plt.title(i.title())
             plt.tight_layout()
+            # add in lines for key milestones
+            for j,row in ann_df.iterrows():
+                # draw a line by the date
+                plt.axvline(x=row['Date'],color='#6c0000')
             plt.savefig('output/word_trends/'+i+'.png')
 
     # Spacy does not seem to do a very good job parsing out entities
@@ -445,13 +458,19 @@ class BPCI_monitor:
         temp_df=sentiment_scoring(temp_df,text_var='text')
         sent_df = temp_df.copy()
         if export_csv:
+            # export unsorted values
+            sent_df.to_excel('output/BPCI_tweets_sentiment_scores.xlsx', index=False)
+            sent_df.to_csv('output/BPCI_tweets_sentiment_scores.csv', index=False)
             # # pull out complaints by looking at negative sentiment scores
             sent_df = sent_df.sort_values('neg',ascending=False)
             #df = df.loc[df['neg']>.1]
+            sent_df.to_excel('output/'+neg_csv+'.xlsx', index=False)
             sent_df.to_csv('output/'+neg_csv+'.csv', index=False)
             sent_df = sent_df.sort_values('pos',ascending=False)
             #df = df.loc[df['neg']>.1]
+            sent_df.to_excel('output/'+pos_csv+'.xlsx', index=False)
             sent_df.to_csv('output/'+pos_csv+'.csv', index=False)
+            self.sent_df=sent_df
         else:
             return(sent_df)
 
@@ -474,11 +493,47 @@ class BPCI_monitor:
             wk_neu=temp_df.neu.mean()
             wk_compound=temp_df['compound'].mean()
             agg_df=agg_df.append(pd.Series([wk_pos,wk_neg,wk_neu,wk_compound],
-                name=str(start_week)[0:10]), ignore_index=True,sort=False)
+                name=str(start_week)[0:10]),sort=False)
             # increment start_week
             start_week+=datetime.timedelta(days=7)
         agg_df.columns=['Positive','Negative','Neutral','Compound']
-        import pdb; pdb.set_trace()
+        agg_df.index=[pd.Timestamp(i) for i in agg_df.index]
+        agg_df.to_csv('output/sentiment_values_table.csv')
+        compar_df=agg_df[['Positive','Negative','Neutral']]
+        compound_df=agg_df[['Compound']]
+        plt.clf()
+        compar_df.plot(figsize=(10,6))
+        plt.xlabel('Date')
+        plt.ylabel('Mean Score')
+        plt.title('Weekly Mean Sentiment Scores')
+        # add in lines for key milestones
+        ann_df=pd.read_excel('input/BPCI_announcements.xlsx')
+        for i,row in ann_df.iterrows():
+            # draw a line by the date
+            plt.axvline(x=row['Date'],color='#6c0000')
+            # add text describing announcement, moving the text down by 10% of
+            # the graph to prevent overlapping text
+            # plt.text(x=row['Date']+datetime.timedelta(days=5),
+            #     y=plt.ylim()[1]-(i*.1+.05)*(plt.ylim()[1]),
+            #     s='<-'+str(row['Date'].date())+': '+row['Announcement'],
+            #     bbox=dict(boxstyle='square', fc='white', ec='none'))
+        plt.savefig("output/sentiment_comparison.png")
+        plt.clf()
+        compound_df.plot(figsize=(10,6))
+        plt.xlabel('Date')
+        plt.ylabel('Mean Score')
+        plt.title('Weekly Compound Sentiment Score')
+        # # add in lines for key milestones
+        # for i,row in ann_df.iterrows():
+        #     # draw a line by the date
+        #     plt.axvline(x=row['Date'],color='#6c0000')
+        #     # add text describing announcement, moving the text down by 10% of
+        #     # the graph to prevent overlapping text
+        #     plt.text(x=row['Date']+datetime.timedelta(days=5),
+        #         y=plt.ylim()[1]-(i*.1+.05)*(plt.ylim()[1]),
+        #         s='<-'+str(row['Date'].date())+': '+row['Announcement'],
+        #         bbox=dict(boxstyle='square', fc='white', ec='none'))
+        plt.savefig("output/sentiment_compound.png")
     # generate word clouds from text of tweets, positive and negative
     def gen_word_cloud(self):
         raw_text = ' '.join(self.tdf.filt_text.to_list())
