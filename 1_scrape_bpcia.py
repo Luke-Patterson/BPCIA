@@ -1,6 +1,11 @@
-from BPCI_monitor_class import BPCI_monitor
+# Request for Twitter scraping from apprenticeship project 10/2
 
-monitor = BPCI_monitor()
+from extract_func.extract_tweets import extract_tweets
+import pandas as pd
+import numpy as np
 
-monitor.extract_tweets(get_retweets=True,geocode_loc=True,start_date='2019-09-11')
-monitor.save_tweets(filename="BPCIA_tweets_raw.csv",append=True)
+df=extract_tweets('BPCI',['BPCIAdvanced','"BPCI Advanced"','"BPCIA"',
+    '"BPCI-A"','"Bundled Payments for Care Improvement–Advanced"',
+    '"Bundled Payments for Care Improvement Advanced"'],
+   get_replies = False, get_retweets = False, geocode_loc=True)
+df.to_csv('output/BPCIA_tweets_raw.csv')

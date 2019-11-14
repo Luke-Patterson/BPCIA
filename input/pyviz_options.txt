@@ -1,0 +1,22 @@
+var options = {
+  "edges": {
+    "arrows": {
+      "to": {
+        "enabled": true
+      }
+    },
+    "color": {
+      "inherit": true
+    },
+    "smooth": false
+  },
+  "physics": {
+    "barnesHut": {
+      "springLength": 150,
+      "springConstant": 0.09,
+      "damping": 0.2,
+      "avoidOverlap": 0.05
+    },
+    "minVelocity": 0.75
+  }
+}

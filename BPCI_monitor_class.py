@@ -2,6 +2,9 @@
 # some custom functions for tweet extraction and analysis
 from extract_func.extract_tweets import extract_tweets
 from analysis_func.sentiment_analysis import sentiment_scoring
+from analysis_func.build_msg_net import build_msg_net
+from pyvis.network import Network
+import pyvis
 # some custom functions for topic modeling
 from tm_gui.GUI import run_lda
 from tm_gui.GUI import Settings
@@ -270,22 +273,24 @@ class BPCI_monitor:
             end_week=pd.Timestamp(start_week+datetime.timedelta(days=7))
             # for each week, get tweets from that week
             temp_df= self.tdf.loc[(self.tdf.date>=start_week)&(self.tdf.date<end_week)]
-            # merge into a single string  text from all tweets
-            corpus=temp_df.text.str.cat(sep=' ').split()
-            # stem and lemmaize text
-            stemmer = SnowballStemmer("english")
-            corpus = [' '.join([stemmer.stem(word) for word in x.split()]) for x in corpus]
-            corpus = [re.sub(r'[^a-zA-Z\s]', ' ', x) for x in corpus]
-            # remove hyperlink tokens
-            corpus = [i for i in corpus if 'https' not in i]
-            corpus = [' '.join(corpus)]
-            count_vectorizer = CountVectorizer(stop_words='english')#max_df=0.8, min_df=0.01,
-            word_counts = count_vectorizer.fit_transform(corpus)
-            word_df=pd.DataFrame(word_counts.toarray(),index=[str(start_week)[0:10]],columns=count_vectorizer.get_feature_names())
-            # normalize to proportion of all tweets
-            word_df=word_df.fillna(0)
-            word_df=word_df/temp_df.shape[0]
-            agg_df=agg_df.append(word_df,sort=False)
+            # append to agg_df if there are any tweets in the week
+            if temp_df.shape[0]!=0:
+                # merge into a single string  text from all tweets
+                corpus=temp_df.text.str.cat(sep=' ').split()
+                # stem and lemmaize text
+                stemmer = SnowballStemmer("english")
+                corpus = [' '.join([stemmer.stem(word) for word in x.split()]) for x in corpus]
+                corpus = [re.sub(r'[^a-zA-Z\s]', ' ', x) for x in corpus]
+                # remove hyperlink tokens
+                corpus = [i for i in corpus if 'https' not in i]
+                corpus = [' '.join(corpus)]
+                count_vectorizer = CountVectorizer(stop_words='english')#max_df=0.8, min_df=0.01,
+                word_counts = count_vectorizer.fit_transform(corpus)
+                word_df=pd.DataFrame(word_counts.toarray(),index=[str(start_week)[0:10]],columns=count_vectorizer.get_feature_names())
+                # normalize to proportion of all tweets
+                word_df=word_df.fillna(0)
+                word_df=word_df/temp_df.shape[0]
+                agg_df=agg_df.append(word_df,sort=False)
             # increment start_week
             start_week+=datetime.timedelta(days=7)
         agg_df=agg_df.fillna(0)
@@ -328,6 +333,8 @@ class BPCI_monitor:
         temp_flg=(chg_df<-.1).astype('int')
         temp_flg=temp_flg.replace(1,-1)
         flg_df[temp_flg==-1]=-1
+        # set filt_df index to datetime so we can graph it
+        filt_df.index=[parser.parse(i) for i in filt_df.index]
         # look at which words have "significant" shifts
         sig_words=flg_df.abs().sum()
         sig_words=sig_words.loc[sig_words!=0]
@@ -339,14 +346,15 @@ class BPCI_monitor:
             plt.clf()
             filt_df[i].plot(figsize=(10,6))
             plt.xlabel('Date')
-            plt.ylabel('% of Tweets containing word')
-            plt.title(i.title())
+            plt.ylabel('% of Tweets containing word stem')
+            plt.title('Tweets using word stem: '+ i.title())
             plt.tight_layout()
             # add in lines for key milestones
             for j,row in ann_df.iterrows():
                 # draw a line by the date
                 plt.axvline(x=row['Date'],color='#6c0000')
             plt.savefig('output/word_trends/'+i+'.png')
+        import pdb; pdb.set_trace()
 
     # Spacy does not seem to do a very good job parsing out entities
     # identification of named entities in tweets
@@ -661,4 +669,21 @@ class BPCI_monitor:
         plt.savefig('output/location_bar_chart_pop_norm.png')
         # save tabulation as CSV
         locs_tab.to_csv('output/location_tabulation.csv',header=True)
+        import pdb; pdb.set_trace()
+
+    # build an interactive visualization of the network
+    def network_viz(self):
+        # build a networkX graph object from tweet data frame
+        self.net_graph=build_msg_net(self.tdf)
+        # remove self edges
+        self.net_graph.remove_edges_from(self.net_graph.selfloop_edges())
+        # start pyviz object
+        viz=Network(height=800,width=800)
+        viz.from_nx(self.net_graph)
+        #viz.show_buttons()
+        # open the preset options we want to specifiy
+        viz_options=open("input/pyviz_options.txt",'r').read()
+        viz.set_options(viz_options)
+        # show the graph in browser
+        viz.show('tweet_network_viz.html')
         import pdb; pdb.set_trace()

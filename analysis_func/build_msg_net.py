@@ -30,8 +30,15 @@ def build_msg_net(tweet_df):
     tweet_df['rt_names'] = tweet_df['rt_names'].apply(_leval)
     tweet_df['rt_follower_counts'] = tweet_df['rt_follower_counts'].apply(_leval)
 
+    # look for the "date" variable in the data set
+    if 'created_at' in tweet_df.columns:
+        date_var='created_at'
+    elif 'date' in tweet_df.columns:
+        date_var='date'
+    else:
+        raise('no date var name found in tweet df. Expected either "date" or "created_at"')
     # transform created_by to a datetime value
-    tweet_df['created_at'] = pd.to_datetime(tweet_df['created_at'])
+    tweet_df[date_var] = pd.to_datetime(tweet_df[date_var])
 
     # get unique list of tagged and author accounts
     # authors - just take unique values of data frame
@@ -73,14 +80,14 @@ def build_msg_net(tweet_df):
     for i, row in tweet_df.iterrows():
         if mentions is not None and not all([i is None for i in mentions]):
             for j in row['user_mentions']:
-                G.add_edge(row.author_name, j,
+                G.add_edge(row.author_name,j,
                     favorites = row['favorite_count'],
                     retweets = row['retweet_count'],
-                    date = row['created_at'])
+                    date = row[date_var])
         # draw edges between users retweeting them
         if row['rt_names'] is not None:
             for j in row['rt_names']:
-                G.add_edge(j, row.author_name, date = row['created_at'],
+                G.add_edge(row.author_name,j, date = row[date_var],
                 retweets = 0,
                 favorites = 0)
         # if no users are mentioned, create a self edge for the tweet
@@ -88,5 +95,5 @@ def build_msg_net(tweet_df):
             G.add_edge(row.author_name, row.author_name,
                 favorites = row['favorite_count'],
                 retweets = row['retweet_count'],
-                date = row['created_at'])
+                date = row[date_var])
     return(G)
